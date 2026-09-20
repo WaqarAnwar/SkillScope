@@ -4,8 +4,7 @@
 
 SkillScope is a job-market intelligence pipeline: it crawls live job boards
 (Remote OK, Arbeitnow) and extracts skills from every listing, then reports
-demand stats, role-family clusters and MapReduce term counts — through a CLI
-or a vanilla-JS web UI.
+demand stats, role-family clusters and MapReduce term counts.
 
 ```
 Scrapy crawl ──► TinyDB (NoSQL) ──► NLTK skill extraction ──►
