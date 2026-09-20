@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkillScope — job market miner</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b21; --panel-2: #1f232b; --border: #2a2f3a;
+    --text: #e6e9ef; --muted: #9aa3b2; --accent: #4f8cff; --good: #3ecf8e; --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .spacer { flex: 1; }
+  .src-label { color: var(--muted); font-size: 13px; }
+  select {
+    font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  }
+  select:focus { border-color: var(--accent); outline: none; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text); padding: 8px 14px;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .55; cursor: wait; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px 24px 60px; }
+  .status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; color: var(--muted); font-size: 13px; }
+  .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--panel-2); border: 1px solid var(--border); }
+  .badge.ok { color: var(--good); border-color: var(--good); }
+  .badge.err { color: var(--bad); border-color: var(--bad); }
+  .spinner {
+    width: 14px; height: 14px; border-radius: 50%; display: none;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    animation: spin .8s linear infinite;
+  }
+  .spinner.on { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .card .num { font-size: 26px; font-weight: 700; }
+  .card .lbl { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  h2 { font-size: 16px; margin: 26px 0 10px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  tr:last-child td { border-bottom: none; }
+  .bar-wrap { display: flex; align-items: center; gap: 10px; }
+  .bar { height: 8px; border-radius: 4px; background: var(--panel-2); flex: 1; max-width: 220px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--accent); }
+  .clusters { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .chip { display: inline-block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 8px; margin: 2px 4px 2px 0; font-size: 13px; }
+  .empty { color: var(--muted); padding: 16px; border: 1px dashed var(--border); border-radius: 10px; }
+  pre.log { background: #0b0d10; border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 12px; overflow: auto; max-height: 240px; }
+  a { color: var(--accent); }
+  .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  small { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+    <h1>SkillScope</h1>
+    <p>scrape &#8594; extract &#8594; count &#8594; analyze</p>
+    <div class="spacer"></div>
+    <label class="src-label" for="sourceSel">Source</label>
+    <select id="sourceSel">
+      <option value="remoteok" selected>Remote OK (live remote jobs)</option>
+      <option value="arbeitnow">Arbeitnow (live jobs EU)</option>
+      <option value="demo">Demo board (offline, deterministic)</option>
+    </select>
+    <button id="refreshBtn">Refresh</button>
+    <button id="runBtn" class="primary">Run full pipeline</button>
+  </header>
+<main>
+  <div class="status">
+    <span class="spinner" id="spinner"></span>
+    <span id="statusMsg">Loading…</span>
+    <span id="runBadge" class="badge" style="display:none"></span>
+  </div>
+
+  <section id="summary" style="display:none">
+    <div class="grid" id="statCards"></div>
+
+    <h2>Top skills</h2>
+    <table id="skillsTable"><thead><tr><th>Skill</th><th style="width:50%">Demand</th><th>Count</th><th>Share</th></tr></thead><tbody></tbody></table>
+
+    <h2>Role clusters</h2>
+    <div class="clusters" id="clusters"></div>
+
+    <h2>MapReduce counts</h2>
+    <div class="two-col">
+      <div>
+        <h2 style="font-size:14px;margin:0 0 6px">Skills</h2>
+        <table id="mrSkills"><thead><tr><th>Skill</th><th>Count</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div>
+        <h2 style="font-size:14px;margin:0 0 6px">Top terms</h2>
+        <table id="mrTerms"><thead><tr><th>Term</th><th>Count</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <h2>Listings</h2>
+    <table id="listingsTable">
+      <thead><tr><th>Title</th><th>Company</th><th>Location</th><th>Posted</th><th>Skills</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section id="emptyState" style="display:none">
+    <div class="empty">No data yet — hit <b>Run full pipeline</b> to scrape the demo job board and build the report.</div>
+  </section>
+
+  <section id="logSection" style="display:none">
+    <h2>Last run output</h2>
+    <pre class="log" id="runLog"></pre>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const running = { on: true, off: false };
+
+function setRunning(on) {
+  $("spinner").classList.toggle("on", on);
+  $("runBtn").disabled = on;
+  $("statusMsg").textContent = on ? "Running scrape → extract → count → analyze…" : "";
+  $("logSection").style.display = "none";
+}
+
+async function loadData() {
+  let report = null, listings = null;
+  try { report = await (await fetch("/report")).json(); } catch {}
+  try {
+    listings = await (await fetch("/listings?limit=1000")).json();
+  } catch {}
+  const hasData = report && !report.error;
+  $("summary").style.display = hasData ? "" : "none";
+  $("emptyState").style.display = hasData ? "none" : "";
+
+  if (hasData) {
+    renderStats(report);
+    renderSkills(report.top_20_skills || []);
+    renderClusters(report.clusters || {});
+    renderMapReduce(report.skill_counts_mapreduce || {}, report.top_10_terms_mapreduce || {});
+  }
+  renderListings(listings ? listings.items : []);
+  if (listings && !listings.total && !hasData) {
+    $("emptyState").style.display = "";
+  }
+  const st = await (await fetch("/run/status")).json();
+  if (st.last_run) {
+    $("runBadge").style.display = "";
+    $("runBadge").textContent = "last run " + new Date(st.last_run).toLocaleString() +
+      (st.last_ok ? "" : " (failed)");
+    $("runBadge").className = "badge " + (st.last_ok ? "ok" : "err");
+  } else {
+    $("runBadge").style.display = "none";
+  }
+  if (st.last_output && st.last_output.length) {
+    $("runLog").textContent = st.last_output.join("\n");
+    $("logSection").style.display = "";
+  }
+}
+
+function renderStats(r) {
+  const cards = [
+    [r.listings ?? 0, "listings crawled"],
+    [r.skills_found ?? 0, "distinct skills"],
+    [r.generated_at ? new Date(r.generated_at).toLocaleString() : "—", "report generated"],
+    [Object.keys(r.clusters || {}).length, "role clusters"],
+  ];
+  $("statCards").innerHTML = cards.map(([num, lbl]) =>
+    `<div class="card"><div class="num">${esc(num)}</div><div class="lbl">${esc(lbl)}</div></div>`
+  ).join("");
+}
+
+function renderSkills(skills) {
+  const max = Math.max(...skills.map(s => s.count), 1);
+  $("skillsTable").querySelector("tbody").innerHTML = skills.map(s =>
+    `<tr><td>${esc(s.skill)}</td><td><div class="bar-wrap"><div class="bar"><span style="width:${(s.count/max*100).toFixed(1)}%"></span></div></div></td>` +
+    `<td>${s.count}</td><td>${((s.share ?? 0) * 100).toFixed(1)}%</td></tr>`
+  ).join("");
+}
+
+function renderClusters(clusters) {
+  const order = Object.entries(clusters).sort((a, b) => a[0].localeCompare(b[0]));
+  $("clusters").innerHTML = order.map(([id, c]) =>
+    `<div class="card"><div class="num" style="font-size:18px">${esc(c.name)}</div>` +
+    `<div class="lbl">${c.listings} listing${c.listings === 1 ? "" : "s"}</div>` +
+    `<div style="margin-top:8px">${(c.top_skills || []).map(s => `<span class="chip">${esc(s)}</span>`).join(" ") || "—"}</div></div>`
+  ).join("");
+}
+
+function renderMapReduce(skills, terms) {
+  $("mrSkills").querySelector("tbody").innerHTML =
+    Object.entries(skills).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("");
+  $("mrTerms").querySelector("tbody").innerHTML =
+    Object.entries(terms).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("");
+}
+
+function renderListings(items) {
+  $("listingsTable").querySelector("tbody").innerHTML = items.length ? items.map(d =>
+    `<tr><td>${esc(d.title)}</td><td>${esc(d.company)}</td><td>${esc(d.location)}</td><td>${esc(d.posted)}</td>` +
+    `<td>${(d.skills || []).map(s => `<span class="chip">${esc(s)}</span>`).join(" ") || "—"}</td></tr>`
+  ).join("") : `<tr><td colspan="5" class="empty">No listings yet.</td></tr>`;
+}
+
+$("refreshBtn").addEventListener("click", loadData);
+$("runBtn").addEventListener("click", async () => {
+  setRunning(true);
+  const params = new URLSearchParams({ source: $("sourceSel").value, limit: "100" });
+  try {
+    const res = await (await fetch("/run?" + params, { method: "POST" })).json();
+    if (res.already_running) {
+      $("statusMsg").textContent = "A pipeline run is already in progress.";
+    } else if (res.status === "error") {
+      $("statusMsg").textContent = "Pipeline failed (see console). " + (res.stderr_tail || []).join(" | ");
+      console.error(res);
+    } else {
+      $("statusMsg").textContent = "Done.";
+    }
+    if (res.output && res.output.length) {
+      $("runLog").textContent = res.output.join("\n");
+      $("logSection").style.display = "";
+    }
+  } catch (e) {
+    $("statusMsg").textContent = "Request failed: " + e;
+  }
+  await loadData();
+  setRunning(false);
+});
+
+loadData();
+</script>
+</body>
+</html>

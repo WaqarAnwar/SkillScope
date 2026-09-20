@@ -1,0 +1,8 @@
+Scrapy>=2.11
+nltk>=3.8
+pandas>=2.2
+scikit-learn>=1.4
+tinydb>=4.8
+fastapi>=0.110
+uvicorn>=0.29
+pytest>=8.0
